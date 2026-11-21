@@ -5,6 +5,7 @@ CVIR 电控二轮 · 四自由度舵机机械臂控制固件
 - 主控：STM32F103C8T6（Blue Pill，64KB Flash / 20KB RAM）
 - 工具链：STM32CubeMX + CMake + Ninja + arm-none-eabi-gcc
 - 执行器：4 × MG90S 金属齿轮舵机（50Hz PWM，500–2500µs）
+  - 现有 3 只 180° 角度版 + 1 只 360° 连续旋转版，后者**不参与位置控制**，仅用于验证 PWM 输出，待更换为 180° 版
 - 传感器：MPU6050（I²C1，400kHz）
 - 上位机通信：USB CDC 虚拟串口，A5 帧协议
 
