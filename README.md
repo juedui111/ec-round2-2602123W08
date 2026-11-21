@@ -36,11 +36,26 @@ cmake --preset Debug
 cmake --build --preset Debug
 ```
 
-产物位于 `build/Debug/`。
+产物位于 `build/Debug/`，包含 `.elf`、`.bin`、`.hex`。
 
 ## 烧录
 
-待补充（ST-Link / DAP-Link 具体命令）。
+ST-Link V2 接 SWD（3.3V / SWDIO / SWCLK / GND），使用 STM32CubeProgrammer：
+
+```bash
+STM32_Programmer_CLI -c port=SWD freq=4000 \
+    -w build/Debug/ec-round2-2602123W08.hex -v -rst
+```
+
+CubeProgrammer 默认安装在 `C:\ST\STM32CubeCLT_1.23.0\STM32CubeProgrammer\bin\`。
+
+## 引脚定义
+
+| 引脚 | 功能 | 备注 |
+|---|---|---|
+| PC13 | 板载 LED | 低电平点亮 |
+| PB12 | 用户按键 | 需外部按键接地，内部上拉 |
+| PA9 / PA10 | USART1 TX / RX | 115200-8-N-1 |
 
 ## 目录结构
 
