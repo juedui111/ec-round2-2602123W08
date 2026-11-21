@@ -1,0 +1,37 @@
+# ---------- 构建产物 ----------
+build/
+cmake-build-*/
+Debug/
+Release/
+
+# ---------- 编译中间文件 ----------
+*.o
+*.d
+*.a
+*.lib
+*.elf
+*.bin
+*.hex
+*.map
+*.lst
+*.su
+*.dmp
+
+# ---------- 编辑器 / IDE 缓存 ----------
+.vscode/
+.idea/
+*.swp
+*~
+.cache/
+compile_commands.json
+
+# ---------- 操作系统 ----------
+Thumbs.db
+.DS_Store
+desktop.ini
+
+# ---------- 任务书禁用项，防止误生成后提交 ----------
+*.uvprojx
+*.uvoptx
+*.ewp
+*.eww
