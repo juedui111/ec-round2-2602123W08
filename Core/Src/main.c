@@ -26,6 +26,7 @@
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
 #include <stdio.h>
+#include "servo.h"
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -47,6 +48,9 @@
 
 #define KEY_DEBOUNCE_MS 20U
 #define LED_BLINK_MS    500U
+
+/* T1 单轴扫动：1 表示走满 500-2500us，0 表示只用中段以免未标定时撞限位 */
+#define PWM_TEST_FULL_RANGE 0
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -68,6 +72,7 @@ static void app_self_check(void);
 static const char *app_reset_cause(void);
 static uint8_t app_key_take_press(void);
 static void app_led_update(void);
+static void app_pwm_test(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -164,6 +169,31 @@ static void app_led_update(void)
     break;
   }
 }
+
+/* T1：CH1 每隔 1.5s 换一个脉宽，方便示波器或万用表读数 */
+static void app_pwm_test(void)
+{
+  static const uint16_t seq_full[] = { 1500U, 500U, 1000U, 1500U, 2000U, 2500U };
+  static const uint16_t seq_safe[] = { 1500U, 1000U, 1250U, 1500U, 1750U, 2000U };
+  static uint32_t t_last = 0;
+  static uint8_t  idx = 0;
+
+  const uint16_t *seq = (PWM_TEST_FULL_RANGE != 0) ? seq_full : seq_safe;
+  const uint8_t   len = (uint8_t)(sizeof(seq_full) / sizeof(seq_full[0]));
+  uint32_t now = HAL_GetTick();
+
+  if ((now - t_last) < 1500U)
+  {
+    return;
+  }
+
+  t_last = now;
+
+  servo_write_us(0U, seq[idx]);
+  printf("[PWM] CH1 = %u us\r\n", (unsigned)servo_get_us(0U));
+
+  idx = (uint8_t)((idx + 1U) % len);
+}
 /* USER CODE END 0 */
 
 /**
@@ -199,6 +229,7 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USB_PCD_Init();
   /* USER CODE BEGIN 2 */
+  servo_init();
   app_self_check();
   s_led_tick = HAL_GetTick();
   /* USER CODE END 2 */
@@ -221,6 +252,7 @@ int main(void)
     }
 
     app_led_update();
+    app_pwm_test();
   }
   /* USER CODE END 3 */
 }
