@@ -25,7 +25,7 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -35,7 +35,18 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
+#define LED_PORT        GPIOC
+#define LED_PIN         GPIO_PIN_13
+#define KEY_PORT        GPIOB
+#define KEY_PIN         GPIO_PIN_12
 
+#define LED_MODE_BLINK  0U
+#define LED_MODE_OFF    1U
+#define LED_MODE_ON     2U
+#define LED_MODE_COUNT  3U
+
+#define KEY_DEBOUNCE_MS 20U
+#define LED_BLINK_MS    500U
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -46,18 +57,113 @@
 /* Private variables ---------------------------------------------------------*/
 
 /* USER CODE BEGIN PV */
-
+static uint32_t s_led_mode = LED_MODE_BLINK;
+static uint32_t s_led_tick = 0;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
-
+static void app_self_check(void);
+static const char *app_reset_cause(void);
+static uint8_t app_key_take_press(void);
+static void app_led_update(void);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+/* printf 重定向：newlib 的 _write 是 weak 符号，这里覆盖它 */
+int _write(int file, char *ptr, int len)
+{
+  (void)file;
+  HAL_UART_Transmit(&huart1, (uint8_t *)ptr, (uint16_t)len, HAL_MAX_DELAY);
+  return len;
+}
 
+static const char *app_reset_cause(void)
+{
+  if (__HAL_RCC_GET_FLAG(RCC_FLAG_PORRST))  return "POR";
+  if (__HAL_RCC_GET_FLAG(RCC_FLAG_PINRST))  return "PIN";
+  if (__HAL_RCC_GET_FLAG(RCC_FLAG_SFTRST))  return "SOFTWARE";
+  if (__HAL_RCC_GET_FLAG(RCC_FLAG_IWDGRST)) return "IWDG";
+  if (__HAL_RCC_GET_FLAG(RCC_FLAG_WWDGRST)) return "WWDG";
+  if (__HAL_RCC_GET_FLAG(RCC_FLAG_LPWRRST)) return "LPWR";
+  return "UNKNOWN";
+}
+
+static void app_self_check(void)
+{
+  printf("\r\n================================\r\n");
+  printf(" ec-round2-2602123W08  T0 自检\r\n");
+  printf("================================\r\n");
+  printf("reset   : %s\r\n", app_reset_cause());
+  printf("SYSCLK  : %lu MHz\r\n", (unsigned long)(HAL_RCC_GetSysClockFreq() / 1000000U));
+  printf("HCLK    : %lu MHz\r\n", (unsigned long)(HAL_RCC_GetHCLKFreq() / 1000000U));
+  printf("PCLK1   : %lu MHz\r\n", (unsigned long)(HAL_RCC_GetPCLK1Freq() / 1000000U));
+  printf("PCLK2   : %lu MHz\r\n", (unsigned long)(HAL_RCC_GetPCLK2Freq() / 1000000U));
+  printf("TIM2    : PSC=%lu ARR=%lu\r\n",
+         (unsigned long)htim2.Init.Prescaler,
+         (unsigned long)htim2.Init.Period);
+  printf("UART1   : %lu bps\r\n", (unsigned long)huart1.Init.BaudRate);
+  printf("LED     : PC13, 1Hz blink\r\n");
+  printf("KEY     : PB12, short press to switch LED mode\r\n");
+  printf("================================\r\n");
+}
+
+/* 按键消抖：检测到一次稳定的按下动作返回 1 */
+static uint8_t app_key_take_press(void)
+{
+  static uint8_t s_level = 0;
+  static uint8_t s_stable = 0;
+  static uint32_t s_change_tick = 0;
+
+  uint8_t level = (HAL_GPIO_ReadPin(KEY_PORT, KEY_PIN) == GPIO_PIN_RESET) ? 1U : 0U;
+  uint32_t now = HAL_GetTick();
+
+  if (level != s_level)
+  {
+    s_level = level;
+    s_change_tick = now;
+    return 0;
+  }
+
+  if ((s_stable != s_level) && ((now - s_change_tick) >= KEY_DEBOUNCE_MS))
+  {
+    s_stable = s_level;
+    return s_stable;
+  }
+
+  return 0;
+}
+
+static void app_led_update(void)
+{
+  uint32_t now = HAL_GetTick();
+
+  switch (s_led_mode)
+  {
+  case LED_MODE_BLINK:
+    if ((now - s_led_tick) >= LED_BLINK_MS)
+    {
+      s_led_tick = now;
+      HAL_GPIO_TogglePin(LED_PORT, LED_PIN);
+    }
+    break;
+
+  case LED_MODE_OFF:
+    /* PC13 低电平点亮，所以高电平是灭 */
+    HAL_GPIO_WritePin(LED_PORT, LED_PIN, GPIO_PIN_SET);
+    break;
+
+  case LED_MODE_ON:
+    HAL_GPIO_WritePin(LED_PORT, LED_PIN, GPIO_PIN_RESET);
+    break;
+
+  default:
+    s_led_mode = LED_MODE_BLINK;
+    break;
+  }
+}
 /* USER CODE END 0 */
 
 /**
@@ -93,7 +199,8 @@ int main(void)
   MX_USART1_UART_Init();
   MX_USB_PCD_Init();
   /* USER CODE BEGIN 2 */
-
+  app_self_check();
+  s_led_tick = HAL_GetTick();
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -103,6 +210,17 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
+    if (app_key_take_press())
+    {
+      s_led_mode = (s_led_mode + 1U) % LED_MODE_COUNT;
+      if (s_led_mode == LED_MODE_BLINK)
+      {
+        s_led_tick = HAL_GetTick();
+      }
+      printf("[KEY] LED mode -> %lu\r\n", (unsigned long)s_led_mode);
+    }
+
+    app_led_update();
   }
   /* USER CODE END 3 */
 }
